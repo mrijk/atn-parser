@@ -22,11 +22,11 @@ namespace Atn
       FormatJson("expanded", expanded);
       FormatJson("#actions", nrChildren);
 
-      Console.WriteLine("\"actions\": [");
+      StartJsonArray("actions");
       for (int i = 0; i < nrChildren; i++) {
 	ReadAction();
       }
-      Console.WriteLine("]");
+      EndJsonArray(true);
 
       Console.WriteLine("}");
       Reader.Close();
@@ -51,11 +51,11 @@ namespace Atn
       FormatJson("expanded", expanded);
       FormatJson("#events", nrChildren);
 
-      Console.WriteLine("\"events\": [");
+      StartJsonArray("events");
       for (int i = 0; i < nrChildren; i++) {
 	ReadActionEvent();
       }
-      Console.WriteLine("]");
+      EndJsonArray(true);
       
       Console.WriteLine("}");
     }
@@ -67,16 +67,75 @@ namespace Atn
       byte withDialog = ReadByte();
       byte dialogOptions = ReadByte();
       var name = readEventName();
-      
+      string displayName = ReadString();
+      int hasDescriptor = ReadInt32();
+
       Console.WriteLine("{");
 
       FormatJson("expanded", expanded);
       FormatJson("enabled", enabled);
       FormatJson("withDialog", withDialog);
       FormatJson("dialogOptions", dialogOptions);
-      FormatJson("name", name, true);
+      FormatJson("name", name);
+      FormatJson("displayName", displayName);
+      FormatJson("hasDescriptor", hasDescriptor);
+
+      // if (PreSix == false)
+      {
+	var classID = ReadUnicodeString();
+	FormatJson("classID", classID);
+	
+	var classID2 = ReadTokenOrString();
+	FormatJson("classID2", classID2);
+      }
+
+      ReadItems();
 
       Console.WriteLine("}");
+    }
+
+    void ReadItems()
+    {
+      int numberOfItems = ReadInt32();
+
+      FormatJson("#items", numberOfItems);
+
+      StartJsonArray("items");
+      for (int i = 0; i < 1 /* numberOfItems */ ; i++)
+	{
+	  ReadItem();
+	}
+      EndJsonArray(true);
+    } 
+
+    void ReadItem()
+    {
+      var key = ReadTokenOrString();
+      var type = ReadFourByteString();
+
+      Console.WriteLine("{");
+      FormatJson("key", key);
+      FormatJson("paramType", type);
+
+      switch (type)
+	{
+	case "enum":
+	  ReadEnum();
+	  break;
+	default:
+	  Console.WriteLine($"ReadItem: type {type} unknown!");
+	  throw new Exception();
+	}
+
+      Console.WriteLine("}");
+    }
+
+    void ReadEnum()
+    {
+      var type = ReadTokenOrString();
+      var value = ReadTokenOrString();
+      FormatJson("type", type);
+      FormatJson("value", value, true);
     }
 
     string readEventName()
@@ -100,6 +159,12 @@ namespace Atn
 
     // Formatting routines
 
+    void StartJsonArray(string key) => 
+      Console.WriteLine($"\"{key}\": [");
+
+    void EndJsonArray(bool last = false) => 
+      Console.WriteLine($"]{last ? "" : ","}");
+
     void FormatJson(string key, string value, bool last = false) => 
       Console.WriteLine($"\"{key}\": \"{value}\"{last ? "" : ","}");
 
@@ -109,13 +174,6 @@ namespace Atn
     // Helper routines to read from binary file
 
     byte ReadByte() => Reader.ReadByte();
-
-    string ReadFourByteString()
-    {
-      var buffer = Reader.ReadBytes(4);
-      var encoding = Encoding.ASCII;
-      return encoding.GetString(buffer).Trim();
-    }
 
     int ReadInt16()
     {
@@ -156,5 +214,13 @@ namespace Atn
     }
 
     public string ReadString() => ReadString(ReadInt32());
+
+    string ReadFourByteString() => ReadString(4).Trim();
+
+    public string ReadTokenOrString()
+    {
+      int length = ReadInt32();
+      return (length == 0) ? ReadFourByteString() : ReadString(length);
+    }
   }
 }
