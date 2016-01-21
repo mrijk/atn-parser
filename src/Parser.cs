@@ -53,11 +53,52 @@ namespace Atn
 
       Console.WriteLine("\"events\": [");
       for (int i = 0; i < nrChildren; i++) {
+	ReadActionEvent();
       }
       Console.WriteLine("]");
       
       Console.WriteLine("}");
     }
+
+    void ReadActionEvent()
+    {
+      byte expanded = ReadByte();
+      byte enabled = ReadByte();
+      byte withDialog = ReadByte();
+      byte dialogOptions = ReadByte();
+      var name = readEventName();
+      
+      Console.WriteLine("{");
+
+      FormatJson("expanded", expanded);
+      FormatJson("enabled", enabled);
+      FormatJson("withDialog", withDialog);
+      FormatJson("dialogOptions", dialogOptions);
+      FormatJson("name", name, true);
+
+      Console.WriteLine("}");
+    }
+
+    string readEventName()
+    {
+      string text = ReadFourByteString();
+      
+      if (text == "TEXT")
+	{
+	  return ReadString();
+	}
+      else if (text == "long")
+	{
+	  return ReadFourByteString();
+	}
+      else
+	{
+	  Console.WriteLine("Unknown text: " + text);
+	  return null;
+	}
+    }
+
+    // Formatting routines
 
     void FormatJson(string key, string value, bool last = false) => 
       Console.WriteLine($"\"{key}\": \"{value}\"{last ? "" : ","}");
@@ -65,7 +106,16 @@ namespace Atn
     void FormatJson(string key, int value, bool last = false) => 
       Console.WriteLine($"\"{key}\": \"{value}\"{last ? "" : ","}");
 
+    // Helper routines to read from binary file
+
     byte ReadByte() => Reader.ReadByte();
+
+    string ReadFourByteString()
+    {
+      var buffer = Reader.ReadBytes(4);
+      var encoding = Encoding.ASCII;
+      return encoding.GetString(buffer).Trim();
+    }
 
     int ReadInt16()
     {
@@ -97,5 +147,14 @@ namespace Atn
     }
 
     string ReadUnicodeString() => ReadUnicodeString(ReadInt32());
+
+    string ReadString(int length)
+    {
+      var buffer = Reader.ReadBytes(length);
+      var encoding = Encoding.ASCII;
+      return encoding.GetString(buffer);
+    }
+
+    public string ReadString() => ReadString(ReadInt32());
   }
 }
