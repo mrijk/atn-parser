@@ -17,11 +17,15 @@ namespace Atn
 	["bool"] = ParseBool,
 	["doub"] = ParseDouble,
 	["enum"] = ParseEnum,
+	["indx"] = ParseIndex,
 	["long"] = ParseLong,
 	["name"] = ParseName,
 	["obj"]  = ParseReference,
 	["prop"] = ParseProperty,
+	["Clss"] = ParseClass,
 	["Enmr"] = ParseEnmr,
+	["Objc"] = ParseObjc,
+	["TEXT"] = ParseText,
 	["UntF"] = ParseDoubleWithUnit,
 	["VlLs"] = ParseList
       };
@@ -57,7 +61,7 @@ namespace Atn
 
       StartJsonArray("actions");
       for (int i = 0; i < nrChildren; i++) {
-	ReadAction();
+	ReadAction(i == nrChildren - 1);
       }
       EndJsonArray(true);
 
@@ -65,7 +69,7 @@ namespace Atn
       Reader.Close();
     }
 
-    void ReadAction()
+    void ReadAction(bool last)
     {      
       int index = ReadInt16();
       byte shiftKey = ReadByte();
@@ -90,7 +94,7 @@ namespace Atn
       }
       EndJsonArray(true);
       
-      Console.WriteLine("}");
+      Console.WriteLine("}" + ((last) ? "" : ","));
     }
 
     void ReadActionEvent()
@@ -113,14 +117,11 @@ namespace Atn
       FormatJson("displayName", displayName);
       FormatJson("hasDescriptor", hasDescriptor);
 
-      // if (PreSix == false)
-      {
-	var classID = ReadUnicodeString();
-	FormatJson("classID", classID);
-	
-	var classID2 = ReadTokenOrString();
-	FormatJson("classID2", classID2);
-      }
+      var classID = ReadUnicodeString();
+      FormatJson("classID", classID);
+      
+      var classID2 = ReadTokenOrString();
+      FormatJson("classID2", classID2);
 
       ReadItems();
 
@@ -182,6 +183,16 @@ namespace Atn
       FormatJson("value", value, true);
     }
 
+    void ParseIndex()
+    {
+      var classID = ReadTokenOrUnicodeString();
+      var key = ReadTokenOrUnicodeString();
+      var index = ReadInt32();
+      FormatJson("classID", classID);
+      FormatJson("key", key);
+      FormatJson("index", index, true);
+    }
+
     void ParseLong()
     {
       var value = ReadInt32();
@@ -230,6 +241,15 @@ namespace Atn
       EndJsonArray(true);
     }
 
+    void ParseClass()
+    {
+      var classID = ReadTokenOrUnicodeString();
+      var classID2 = ReadTokenOrUnicodeString();
+
+      FormatJson("classID", classID);
+      FormatJson("classID2", classID2, true);
+    }
+
     void ParseEnmr()
     {
       var classID = ReadTokenOrUnicodeString();
@@ -239,6 +259,29 @@ namespace Atn
       FormatJson("classID", classID);
       FormatJson("key", key);
       FormatJson("type#1", type);
+      FormatJson("value", value, true);
+    }
+
+    void ParseObjc()
+    {
+      var classID = ReadTokenOrUnicodeString();
+      var classID2 = ReadTokenOrUnicodeString();
+
+      FormatJson("classID", classID);
+      FormatJson("classID2", classID2);
+
+      int number = ReadInt32();
+      FormatJson("#children", number);
+      StartJsonArray("children");
+      for (int i = 0; i < number; i++) {
+	ReadItem(i == number - 1);
+      }
+      EndJsonArray(true);
+    }
+
+    void ParseText()
+    {
+      var value = ReadUnicodeString();
       FormatJson("value", value, true);
     }
 
