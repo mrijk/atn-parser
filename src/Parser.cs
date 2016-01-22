@@ -18,7 +18,10 @@ namespace Atn
 	["doub"] = ParseDouble,
 	["enum"] = ParseEnum,
 	["long"] = ParseLong,
+	["name"] = ParseName,
 	["obj"]  = ParseReference,
+	["prop"] = ParseProperty,
+	["Enmr"] = ParseEnmr,
 	["UntF"] = ParseDoubleWithUnit,
 	["VlLs"] = ParseList
       };
@@ -185,12 +188,34 @@ namespace Atn
       FormatJson("value", value, true);
     }
 
+    void ParseName()
+    {
+      var classID = ReadTokenOrUnicodeString();
+      var classID2 = ReadTokenOrString();
+      var key = ReadTokenOrUnicodeString();
+      FormatJson("classID", classID);
+      FormatJson("classID2", classID2);
+      FormatJson("key", key, true);
+    }
+
     void ParseReference()
     {
       int number = ReadInt32();
       FormatJson("#referenceItems", number);
       StartJsonArray("referenceItems");
+      for (int i = 0; i < number; i++) {
+	  ParseReferenceItem(i == number - 1);
+      }
       EndJsonArray(true);
+    }
+
+    void ParseReferenceItem(bool last)
+    {
+      Console.WriteLine("{");
+      var type = ReadFourByteString();
+      FormatJson("type", type);
+      ParseType(type);
+      Console.WriteLine("}" + ((last) ? "" : ","));
     }
 
     void ParseList()
@@ -203,6 +228,28 @@ namespace Atn
 	  ParseListItem(i == number - 1);
       }
       EndJsonArray(true);
+    }
+
+    void ParseEnmr()
+    {
+      var classID = ReadTokenOrUnicodeString();
+      var key = ReadTokenOrString();
+      var type = ReadTokenOrString();
+      var value = ReadTokenOrString();
+      FormatJson("classID", classID);
+      FormatJson("key", key);
+      FormatJson("type#1", type);
+      FormatJson("value", value, true);
+    }
+
+    void ParseProperty()
+    {
+      var classID = ReadTokenOrUnicodeString();
+      var classID2 = ReadTokenOrUnicodeString();
+      var key = ReadTokenOrString();
+      FormatJson("classID", classID);
+      FormatJson("classID2", classID2);
+      FormatJson("key", key, true);
     }
 
     void ParseListItem(bool last)
@@ -295,14 +342,20 @@ namespace Atn
     string ReadString(int length) => 
       Encoding.ASCII.GetString(ReadBytes(length));
 
-    public string ReadString() => ReadString(ReadInt32());
+    string ReadString() => ReadString(ReadInt32());
 
     string ReadFourByteString() => ReadString(4).Trim();
 
-    public string ReadTokenOrString()
+    string ReadTokenOrString()
     {
       int length = ReadInt32();
       return (length == 0) ? ReadFourByteString() : ReadString(length);
+    }
+
+    string ReadTokenOrUnicodeString()
+    {
+      int length = ReadInt32();
+      return (length == 0) ? ReadFourByteString() : ReadUnicodeString(length);
     }
   }
 }
