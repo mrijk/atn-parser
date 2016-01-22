@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Text;
 
@@ -7,6 +8,35 @@ namespace Atn
   class Parser
   {
     BinaryReader Reader {get; set;}
+
+    Dictionary<string, Action> Lookup {get;}
+
+    public Parser()
+    {
+      Lookup = new Dictionary<string, Action>() {
+	["bool"] = ParseBool,
+	["doub"] = ParseDouble,
+	["enum"] = ParseEnum,
+	["long"] = ParseLong,
+	["obj"]  = ParseReference,
+	["UntF"] = ParseDoubleWithUnit,
+	["VlLs"] = ParseList
+      };
+    }
+
+    void ParseType(string type)
+    {
+      Action func;
+      if (Lookup.TryGetValue(type, out func))
+	{
+	  func();
+	}
+      else
+	{
+	  Console.WriteLine($"ReadItem: type {type} unknown!");
+	  throw new Exception();
+	}
+    }
 
     public void Parse(string file)
     {
@@ -101,14 +131,14 @@ namespace Atn
       FormatJson("#items", numberOfItems);
 
       StartJsonArray("items");
-      for (int i = 0; i < 1 /* numberOfItems */ ; i++)
+      for (int i = 0; i < numberOfItems; i++)
 	{
-	  ReadItem();
+	  ReadItem(i == numberOfItems - 1);
 	}
       EndJsonArray(true);
     } 
 
-    void ReadItem()
+    void ReadItem(bool last)
     {
       var key = ReadTokenOrString();
       var type = ReadFourByteString();
@@ -117,25 +147,71 @@ namespace Atn
       FormatJson("key", key);
       FormatJson("paramType", type);
 
-      switch (type)
-	{
-	case "enum":
-	  ReadEnum();
-	  break;
-	default:
-	  Console.WriteLine($"ReadItem: type {type} unknown!");
-	  throw new Exception();
-	}
-
-      Console.WriteLine("}");
+      ParseType(type);
+      Console.WriteLine("}" + ((last) ? "" : ","));
     }
 
-    void ReadEnum()
+    void ParseBool()
+    {
+      var value = ReadByte();
+      FormatJson("value", value, true);      
+    }
+
+    void ParseDouble()
+    {
+      var value = ReadDouble();
+      FormatJson("value", value, true);
+    }
+
+    void ParseDoubleWithUnit()
+    {
+      var units = ReadFourByteString();
+      var value = ReadDouble();
+      FormatJson("units", units);
+      FormatJson("value", value, true);
+    }
+
+    void ParseEnum()
     {
       var type = ReadTokenOrString();
       var value = ReadTokenOrString();
       FormatJson("type", type);
       FormatJson("value", value, true);
+    }
+
+    void ParseLong()
+    {
+      var value = ReadInt32();
+      FormatJson("value", value, true);
+    }
+
+    void ParseReference()
+    {
+      int number = ReadInt32();
+      FormatJson("#referenceItems", number);
+      StartJsonArray("referenceItems");
+      EndJsonArray(true);
+    }
+
+    void ParseList()
+    {
+      int number = ReadInt32();
+      FormatJson("#listItems", number);
+
+      StartJsonArray("listItems");
+      for (int i = 0; i < number; i++) {
+	  ParseListItem(i == number - 1);
+      }
+      EndJsonArray(true);
+    }
+
+    void ParseListItem(bool last)
+    {
+      Console.WriteLine("{");
+      var type = ReadFourByteString();
+      FormatJson("paramType", type);
+      ParseType(type);
+      Console.WriteLine("}" + ((last) ? "" : ","));
     }
 
     string readEventName()
@@ -171,27 +247,37 @@ namespace Atn
     void FormatJson(string key, int value, bool last = false) => 
       Console.WriteLine($"\"{key}\": \"{value}\"{last ? "" : ","}");
 
+    void FormatJson(string key, double value, bool last = false) => 
+      Console.WriteLine($"\"{key}\": \"{value}\"{last ? "" : ","}");
+
     // Helper routines to read from binary file
+
+    byte[] ReadBytes(int length) => Reader.ReadBytes(length);
 
     byte ReadByte() => Reader.ReadByte();
 
-    int ReadInt16()
-    {
-      var val = Reader.ReadBytes(2);      
-      return val[1] + 256 * val[0];
-    }
+    int ReadInt16(byte[] b) => b[1] + 256 * b[0];
 
-    int ReadInt32()
+    int ReadInt16() => ReadInt16(ReadBytes(2));
+
+    int ReadInt32(byte[] b) => b[3] + 256 * (b[2] + 256 * (b[1] + 256 * b[0]));
+
+    int ReadInt32() => ReadInt32(ReadBytes(4));
+
+    double ReadDouble()
     {
-      var val = Reader.ReadBytes(4);
-      return val[3] + 256 * (val[2] + 256 * (val[1] + 256 * val[0]));
+      var buffer = ReadBytes(8);
+      Array.Reverse(buffer);
+      var memoryStream = new MemoryStream(buffer);
+      var reader = new BinaryReader(memoryStream);
+      return reader.ReadDouble();
     }
 
     string ReadUnicodeString(int length)
     {
       length--;	// Strip last 2 zero's
       var buffer = Reader.ReadBytes(2 * length);
-      Reader.ReadBytes(2);	// Read and ignore 2 zero's
+      ReadBytes(2);	// Read and ignore 2 zero's
 
       for (int i = 0; i < 2 * length; i += 2)
 	{
@@ -206,12 +292,8 @@ namespace Atn
 
     string ReadUnicodeString() => ReadUnicodeString(ReadInt32());
 
-    string ReadString(int length)
-    {
-      var buffer = Reader.ReadBytes(length);
-      var encoding = Encoding.ASCII;
-      return encoding.GetString(buffer);
-    }
+    string ReadString(int length) => 
+      Encoding.ASCII.GetString(ReadBytes(length));
 
     public string ReadString() => ReadString(ReadInt32());
 
